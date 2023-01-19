@@ -1,0 +1,45 @@
+name: build-me
+on: [push, pull_request] 
+
+jobs:
+  actually-build:
+    outputs:
+      hashes: ${{ steps.hash.outputs.hashes }}
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.19.5'
+      
+      - name: get pretty
+        run: |
+            go get github.com/kr/pretty
+
+      - name: ok build
+        run: |
+            go build -o main .
+            
+      - name: generate hashes
+        shell: bash
+        id: hash
+        run: |
+          echo "hashes=$(sha256sum main | base64 -w0)" >> "$GITHUB_OUTPUT"
+      
+      - uses: actions/upload-artifact@v3
+        with:
+          name: my-artifact
+          path: |
+            main
+
+  provenance:
+    needs: [actually-build]
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.4.0
+    with:
+      base64-subjects: "${{ needs.actually-build.outputs.hashes }}"
+      upload-assets: true
